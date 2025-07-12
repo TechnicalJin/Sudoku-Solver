@@ -3,15 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Sudoku Solver</title>
+    <title>Advanced Sudoku Game</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/css/style.css">
     <style>
-        /* Additional styles to fix any layout issues */
+        body {
+            padding-bottom: 70px;
+            background-color: #f8f9fa;
+        }
+
         .sudoku-grid {
             border-collapse: collapse;
             margin: 20px auto;
             border: 3px solid #000;
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
         .sudoku-grid td {
@@ -37,6 +42,7 @@
             border: none;
             background: transparent;
             outline: none;
+            transition: all 0.3s ease;
         }
 
         .sudoku-grid input.subgrid {
@@ -46,12 +52,30 @@
         .sudoku-grid input.invalid {
             background-color: #ffebee;
             color: #d32f2f;
+            animation: shake 0.5s ease-in-out;
+        }
+
+        .sudoku-grid input.prefilled {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        .sudoku-grid input:focus {
+            background-color: #fff3e0;
+            box-shadow: inset 0 0 5px rgba(255, 152, 0, 0.5);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
         }
 
         .control-panel {
             margin: 20px 0;
             padding: 20px;
-            background-color: #f8f9fa;
+            background-color: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
@@ -62,7 +86,8 @@
             left: 0;
             right: 0;
             padding: 10px 20px;
-            background-color: #e9ecef;
+            background-color: #343a40;
+            color: white;
             border-top: 1px solid #dee2e6;
             display: flex;
             justify-content: space-between;
@@ -84,34 +109,89 @@
             border-bottom: 1px solid #dee2e6;
         }
 
-        body {
-            padding-bottom: 70px; /* Space for fixed status bar */
-        }
-
         .timer-display {
             font-family: 'Courier New', monospace;
             font-weight: bold;
-            color: #007bff;
+            color: #28a745;
         }
 
         .status-message {
             font-weight: 500;
         }
 
-        .difficulty-selector {
+        .mistakes-counter {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .game-over-modal {
+            display: none;
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: none;
+            border-radius: 10px;
+            width: 300px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .instructions {
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .instructions h6 {
+            color: #0056b3;
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .game-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
         }
 
-        .puzzle-actions {
-            margin: 15px 0;
+        .stat-item {
+            text-align: center;
         }
 
-        .solving-actions {
-            margin: 15px 0;
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
         }
 
-        .utility-actions {
-            margin: 15px 0;
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
         }
     </style>
 </head>
@@ -119,7 +199,7 @@
 <div class="container-fluid">
     <div class="row">
         <div class="col-12">
-            <h1 class="text-center mt-3 mb-4">Advanced Sudoku Solver</h1>
+            <h1 class="text-center mt-3 mb-4">Advanced Sudoku Game</h1>
         </div>
     </div>
 
@@ -138,18 +218,40 @@
             <div class="control-panel">
                 <h3 class="text-center mb-4">Sudoku Controls</h3>
 
+                <!-- Game Stats -->
+                <div class="game-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">Mistakes</div>
+                        <div class="stat-value mistakes-counter" id="mistakes-display">0/3</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Timer</div>
+                        <div class="stat-value timer-display" id="timer-display">00:00</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">Difficulty</div>
+                        <div class="stat-value" id="current-difficulty">Medium</div>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="instructions">
+                    <h6>How to play Sudoku:</h6>
+                    <ul>
+                        <li>Fill each row with numbers 1-9 (no duplicates)</li>
+                        <li>Fill each column with numbers 1-9 (no duplicates)</li>
+                        <li>Fill each 3×3 grid with numbers 1-9 (no duplicates)</li>
+                        <li>You have 3 mistakes allowed per game</li>
+                        <li>Invalid entries will be highlighted in red</li>
+                    </ul>
+                </div>
+
                 <!-- Solving Actions -->
                 <div class="solving-actions">
                     <h5>Solve Puzzle</h5>
                     <div class="btn-group-custom">
                         <button class="btn btn-success" onclick="solve('backtracking')">
-                            <i class="fas fa-play"></i> Solve (Backtracking)
-                        </button>
-                        <button class="btn btn-info" onclick="solve('dlx')">
-                            <i class="fas fa-fast-forward"></i> Solve (DLX)
-                        </button>
-                        <button class="btn btn-warning" onclick="stepByStepSolve()">
-                            <i class="fas fa-step-forward"></i> Step-by-Step
+                            🚀 Solve Puzzle
                         </button>
                     </div>
                 </div>
@@ -168,7 +270,7 @@
                         </select>
                     </div>
                     <button class="btn btn-primary btn-block" onclick="generatePuzzle()">
-                        <i class="fas fa-dice"></i> Generate Puzzle
+                        🎲 Generate Puzzle
                     </button>
                 </div>
 
@@ -179,10 +281,10 @@
                     <h5>Puzzle Management</h5>
                     <div class="btn-group-custom">
                         <button class="btn btn-outline-primary" onclick="savePuzzle()">
-                            <i class="fas fa-save"></i> Save Puzzle
+                            💾 Save Puzzle
                         </button>
                         <button class="btn btn-outline-secondary" onclick="loadPuzzle()">
-                            <i class="fas fa-folder-open"></i> Load Puzzle
+                            📁 Load Puzzle
                         </button>
                     </div>
                 </div>
@@ -194,13 +296,13 @@
                     <h5>Utilities</h5>
                     <div class="btn-group-custom">
                         <button class="btn btn-outline-success" onclick="validateBoard()">
-                            <i class="fas fa-check"></i> Validate
+                            ✅ Validate
                         </button>
                         <button class="btn btn-outline-danger" onclick="clearBoard()">
-                            <i class="fas fa-trash"></i> Clear Board
+                            🗑️ Clear Board
                         </button>
                         <button class="btn btn-outline-info" onclick="resetTimer()">
-                            <i class="fas fa-stopwatch"></i> Reset Timer
+                            ⏰ Reset Timer
                         </button>
                     </div>
                 </div>
@@ -211,19 +313,42 @@
 
 <!-- Fixed Status Bar -->
 <div class="status-bar">
-    <span id="status" class="status-message">Enter a Sudoku puzzle or generate a new one</span>
+    <span id="status" class="status-message">Generate a new puzzle to start playing!</span>
     <span id="timer" class="timer-display">Time: 00:00</span>
+</div>
+
+<!-- Game Over Modal -->
+<div id="gameOverModal" class="game-over-modal">
+    <div class="modal-content">
+        <h4>Game Over</h4>
+        <p id="gameOverMessage">You have made 3 mistakes and lost this game</p>
+        <button class="btn btn-primary" onclick="secondChance()">Second Chance</button>
+        <button class="btn btn-secondary" onclick="newGame()">New Game</button>
+    </div>
 </div>
 
 <!-- Loading Scripts -->
 <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
-<script src="/js/sudoku.js"></script>
-
-<!-- Initialize the Sudoku grid -->
 <script>
+    let board = Array(9).fill().map(() => Array(9).fill('.'));
+    let originalBoard = Array(9).fill().map(() => Array(9).fill('.'));
+    let isSolving = false;
+    let timerInterval;
+    let gameStarted = false;
+    let mistakes = 0;
+    let maxMistakes = 3;
+    let gameOver = false;
+    let savedPuzzles = [];
+
+    // Initialize game
     $(document).ready(function() {
-        // Generate the 9x9 Sudoku grid
+        generateGrid();
+        updateGrid();
+        $('#status').text('Generate a new puzzle to start playing!');
+        loadSavedPuzzles();
+    });
+
+    function generateGrid() {
         let gridHTML = '';
         for (let i = 0; i < 9; i++) {
             gridHTML += '<tr>';
@@ -244,13 +369,414 @@
             gridHTML += '</tr>';
         }
         $('#sudoku-tbody').html(gridHTML);
+    }
 
-        // Initialize the game
+    function updateBoard(element, i, j) {
+        if (gameOver) return;
+
+        const value = element.value;
+        const oldValue = board[i][j];
+
+        // Only allow digits 1-9 or empty
+        if (value !== '' && !value.match(/^[1-9]$/)) {
+            element.value = board[i][j] === '.' ? '' : board[i][j];
+            return;
+        }
+
+        // Don't allow modification of prefilled cells
+        if (originalBoard[i][j] !== '.') {
+            element.value = originalBoard[i][j];
+            return;
+        }
+
+        // Start timer on first move
+        if (!gameStarted && value !== '') {
+            startTimer();
+            gameStarted = true;
+        }
+
+        board[i][j] = value === '' ? '.' : value;
+
+        // Check for validity and handle mistakes
+        if (value !== '' && !isValidMove(i, j, value)) {
+            element.classList.add('invalid');
+
+            // Only count as mistake if it's a new invalid entry
+            if (oldValue !== value) {
+                mistakes++;
+                updateMistakesDisplay();
+
+                if (mistakes >= maxMistakes) {
+                    endGame();
+                }
+            }
+        } else {
+            element.classList.remove('invalid');
+
+            // Check if puzzle is complete
+            if (isPuzzleComplete()) {
+                completePuzzle();
+            }
+        }
+    }
+
+    function isValidMove(row, col, num) {
+        const tempBoard = board.map(row => [...row]);
+
+        // Check row
+        for (let i = 0; i < 9; i++) {
+            if (i !== col && tempBoard[row][i] === num) {
+                return false;
+            }
+        }
+
+        // Check column
+        for (let i = 0; i < 9; i++) {
+            if (i !== row && tempBoard[i][col] === num) {
+                return false;
+            }
+        }
+
+        // Check 3x3 box
+        const startRow = 3 * Math.floor(row / 3);
+        const startCol = 3 * Math.floor(col / 3);
+        for (let i = startRow; i < startRow + 3; i++) {
+            for (let j = startCol; j < startCol + 3; j++) {
+                if ((i !== row || j !== col) && tempBoard[i][j] === num) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    function solve(method) {
+        if (isSolving || gameOver) return;
+
+        isSolving = true;
+        $('#status').text('Solving...');
+
+        // Simulate API call with backtracking solution
+        setTimeout(() => {
+            const boardCopy = board.map(row => [...row]);
+            if (solveSudoku(boardCopy)) {
+                board = boardCopy;
+                updateGrid();
+                $('#status').text('Puzzle solved!');
+                stopTimer();
+                gameOver = true;
+            } else {
+                $('#status').text('No solution found!');
+            }
+            isSolving = false;
+        }, 500);
+    }
+
+    function solveSudoku(board) {
+        for (let row = 0; row < 9; row++) {
+            for (let col = 0; col < 9; col++) {
+                if (board[row][col] === '.') {
+                    for (let num = 1; num <= 9; num++) {
+                        if (isValidPlacement(board, row, col, num.toString())) {
+                            board[row][col] = num.toString();
+                            if (solveSudoku(board)) {
+                                return true;
+                            }
+                            board[row][col] = '.';
+                        }
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    function isValidPlacement(board, row, col, num) {
+        // Check row
+        for (let i = 0; i < 9; i++) {
+            if (board[row][i] === num) return false;
+        }
+
+        // Check column
+        for (let i = 0; i < 9; i++) {
+            if (board[i][col] === num) return false;
+        }
+
+        // Check 3x3 box
+        const startRow = 3 * Math.floor(row / 3);
+        const startCol = 3 * Math.floor(col / 3);
+        for (let i = startRow; i < startRow + 3; i++) {
+            for (let j = startCol; j < startCol + 3; j++) {
+                if (board[i][j] === num) return false;
+            }
+        }
+
+        return true;
+    }
+
+    function generatePuzzle() {
+        $('#status').text('Generating puzzle...');
+
+        const difficulty = $('#difficulty').val();
+        $('#current-difficulty').text(difficulty.charAt(0).toUpperCase() + difficulty.slice(1));
+
+        setTimeout(() => {
+            // Generate a complete solved board
+            const newBoard = Array(9).fill().map(() => Array(9).fill('.'));
+
+            // Fill diagonal boxes first
+            for (let i = 0; i < 9; i += 3) {
+                fillBox(newBoard, i, i);
+            }
+
+            // Solve the board
+            solveSudoku(newBoard);
+
+            // Remove numbers based on difficulty
+            let clues;
+            switch (difficulty) {
+                case 'easy': clues = 40; break;
+                case 'medium': clues = 30; break;
+                case 'hard': clues = 25; break;
+                default: clues = 30;
+            }
+
+            removeNumbers(newBoard, clues);
+
+            board = newBoard;
+            originalBoard = newBoard.map(row => [...row]);
+
+            resetGame();
+            updateGrid();
+            $('#status').text(`New ${difficulty} puzzle generated! Start playing.`);
+        }, 500);
+    }
+
+    function fillBox(board, startRow, startCol) {
+        const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        shuffleArray(numbers);
+
+        let index = 0;
+        for (let i = startRow; i < startRow + 3; i++) {
+            for (let j = startCol; j < startCol + 3; j++) {
+                board[i][j] = numbers[index++].toString();
+            }
+        }
+    }
+
+    function removeNumbers(board, clues) {
+        const numbersToRemove = 81 - clues;
+        const positions = [];
+
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                positions.push([i, j]);
+            }
+        }
+
+        shuffleArray(positions);
+
+        let removed = 0;
+        for (const [row, col] of positions) {
+            if (removed >= numbersToRemove) break;
+
+            const backup = board[row][col];
+            board[row][col] = '.';
+            removed++;
+        }
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    function savePuzzle() {
+        if (board.every(row => row.every(cell => cell === '.'))) {
+            $('#status').text('No puzzle to save!');
+            return;
+        }
+
+        const puzzle = {
+            id: Date.now(),
+            board: board.map(row => row.join('')).join('\n'),
+            difficulty: $('#difficulty').val(),
+            createdAt: new Date().toISOString()
+        };
+
+        savedPuzzles.push(puzzle);
+        localStorage.setItem('sudokuPuzzles', JSON.stringify(savedPuzzles));
+        $('#status').text(`Puzzle saved successfully! ID: ${puzzle.id}`);
+    }
+
+    function loadPuzzle() {
+        if (savedPuzzles.length === 0) {
+            $('#status').text('No saved puzzles found!');
+            return;
+        }
+
+        let puzzleList = 'Available puzzles:\n';
+        savedPuzzles.forEach(p => {
+            puzzleList += `ID: ${p.id}, Difficulty: ${p.difficulty || 'Unknown'}, Created: ${new Date(p.createdAt).toLocaleString()}\n`;
+        });
+
+        const id = prompt(puzzleList + '\nEnter puzzle ID to load:');
+        if (id) {
+            const puzzle = savedPuzzles.find(p => p.id.toString() === id);
+            if (puzzle) {
+                const rows = puzzle.board.split('\n');
+                board = rows.map(row => row.split(''));
+                originalBoard = board.map(row => [...row]);
+                resetGame();
+                updateGrid();
+                $('#status').text(`Puzzle ${id} loaded successfully!`);
+            } else {
+                $('#status').text('Puzzle not found!');
+            }
+        }
+    }
+
+    function loadSavedPuzzles() {
+        const saved = localStorage.getItem('sudokuPuzzles');
+        if (saved) {
+            savedPuzzles = JSON.parse(saved);
+        }
+    }
+
+    function clearBoard() {
+        board = Array(9).fill().map(() => Array(9).fill('.'));
+        originalBoard = Array(9).fill().map(() => Array(9).fill('.'));
+        resetGame();
         updateGrid();
-        $('#status').text('Enter a Sudoku puzzle or generate a new one');
-    });
+        $('#status').text('Board cleared! Generate a new puzzle to start playing.');
+    }
 
-    // Keyboard navigation support
+    function resetGame() {
+        mistakes = 0;
+        gameOver = false;
+        gameStarted = false;
+        updateMistakesDisplay();
+        stopTimer();
+        resetTimer();
+        clearInvalidCells();
+        $('#gameOverModal').hide();
+    }
+
+    function updateGrid() {
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                const cell = $(`#cell-${i}-${j}`);
+                const value = board[i][j] === '.' ? '' : board[i][j];
+                cell.val(value);
+
+                // Mark prefilled cells
+                if (originalBoard[i][j] !== '.') {
+                    cell.addClass('prefilled');
+                    cell.prop('readonly', true);
+                } else {
+                    cell.removeClass('prefilled');
+                    cell.prop('readonly', false);
+                }
+
+                cell.removeClass('invalid');
+            }
+        }
+    }
+
+    function updateMistakesDisplay() {
+        $('#mistakes-display').text(`${mistakes}/${maxMistakes}`);
+    }
+
+    function clearInvalidCells() {
+        $('.sudoku-grid input').removeClass('invalid');
+    }
+
+    function validateBoard() {
+        let isValid = true;
+        clearInvalidCells();
+
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                const value = board[i][j];
+                if (value !== '.' && !isValidMove(i, j, value)) {
+                    $(`#cell-${i}-${j}`).addClass('invalid');
+                    isValid = false;
+                }
+            }
+        }
+
+        if (isValid) {
+            $('#status').text('Board is valid!');
+        } else {
+            $('#status').text('Board contains invalid entries!');
+        }
+
+        return isValid;
+    }
+
+    function isPuzzleComplete() {
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                if (board[i][j] === '.') return false;
+            }
+        }
+        return validateBoard();
+    }
+
+    function completePuzzle() {
+        stopTimer();
+        gameOver = true;
+        $('#status').text('Congratulations! Puzzle completed successfully!');
+    }
+
+    function endGame() {
+        gameOver = true;
+        stopTimer();
+        $('#gameOverModal').show();
+    }
+
+    function secondChance() {
+        mistakes = 0;
+        gameOver = false;
+        updateMistakesDisplay();
+        clearInvalidCells();
+        $('#gameOverModal').hide();
+        $('#status').text('Second chance! Be more careful.');
+        startTimer();
+    }
+
+    function newGame() {
+        $('#gameOverModal').hide();
+        generatePuzzle();
+    }
+
+    function startTimer() {
+        let seconds = 0;
+        timerInterval = setInterval(() => {
+            seconds++;
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            const timeString = `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            $('#timer').text(`Time: ${timeString}`);
+            $('#timer-display').text(timeString);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerInterval);
+    }
+
+    function resetTimer() {
+        stopTimer();
+        $('#timer').text('Time: 00:00');
+        $('#timer-display').text('00:00');
+    }
+
+    // Keyboard navigation
     $(document).on('keydown', '.sudoku-grid input', function(e) {
         const currentId = $(this).attr('id');
         const parts = currentId.split('-');
@@ -271,7 +797,7 @@
                 row = row < 8 ? row + 1 : 0;
                 break;
             default:
-                return; // exit this handler for other keys
+                return;
         }
 
         $(`#cell-${row}-${col}`).focus();
@@ -286,15 +812,19 @@
             let row = parseInt(parts[1]);
             let col = parseInt(parts[2]);
 
-            // Move to next cell
-            if (col < 8) {
-                col++;
-            } else if (row < 8) {
-                row++;
-                col = 0;
-            }
+            // Find next empty cell
+            do {
+                if (col < 8) {
+                    col++;
+                } else if (row < 8) {
+                    row++;
+                    col = 0;
+                } else {
+                    break;
+                }
+            } while (originalBoard[row][col] !== '.' && row < 9);
 
-            if (row <= 8 && col <= 8) {
+            if (row < 9 && col < 9) {
                 setTimeout(() => {
                     $(`#cell-${row}-${col}`).focus();
                 }, 50);
