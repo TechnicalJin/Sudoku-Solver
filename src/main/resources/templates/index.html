@@ -53,6 +53,7 @@
             background-color: #ffebee;
             color: #d32f2f;
             animation: shake 0.5s ease-in-out;
+            border: 2px solid #d32f2f;
         }
 
         .sudoku-grid input.prefilled {
@@ -64,6 +65,17 @@
         .sudoku-grid input:focus {
             background-color: #fff3e0;
             box-shadow: inset 0 0 5px rgba(255, 152, 0, 0.5);
+        }
+
+        .sudoku-grid input.highlighted {
+            background-color: #e3f2fd;
+            box-shadow: 0 0 5px rgba(33, 150, 243, 0.5);
+        }
+
+        .sudoku-grid input.duplicate {
+            background-color: #fff3e0;
+            color: #f57c00;
+            font-weight: bold;
         }
 
         @keyframes shake {
@@ -193,6 +205,32 @@
             font-weight: bold;
             color: #495057;
         }
+
+        .error-message {
+            color: #dc3545;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .validation-hints {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+
+        .validation-hints h6 {
+            color: #856404;
+            margin-bottom: 8px;
+        }
+
+        .hint-item {
+            font-size: 12px;
+            color: #856404;
+            margin: 3px 0;
+        }
     </style>
 </head>
 <body>
@@ -212,6 +250,7 @@
                     </tbody>
                 </table>
             </div>
+            <div class="error-message text-center" id="error-message"></div>
         </div>
 
         <div class="col-lg-4 col-md-5">
@@ -234,6 +273,15 @@
                     </div>
                 </div>
 
+                <!-- Validation Hints -->
+                <div class="validation-hints">
+                    <h6>Live Validation:</h6>
+                    <div class="hint-item">✓ Real-time error detection</div>
+                    <div class="hint-item">✓ Duplicate number highlighting</div>
+                    <div class="hint-item">✓ Invalid moves prevention</div>
+                    <div class="hint-item">✓ Visual feedback for errors</div>
+                </div>
+
                 <!-- Instructions -->
                 <div class="instructions">
                     <h6>How to play Sudoku:</h6>
@@ -243,6 +291,7 @@
                         <li>Fill each 3×3 grid with numbers 1-9 (no duplicates)</li>
                         <li>You have 3 mistakes allowed per game</li>
                         <li>Invalid entries will be highlighted in red</li>
+                        <li>Use arrow keys to navigate between cells</li>
                     </ul>
                 </div>
 
@@ -252,6 +301,9 @@
                     <div class="btn-group-custom">
                         <button class="btn btn-success" onclick="solve('backtracking')">
                             🚀 Solve Puzzle
+                        </button>
+                        <button class="btn btn-info" onclick="getHint()">
+                            💡 Get Hint
                         </button>
                     </div>
                 </div>
@@ -332,6 +384,7 @@
 <script>
     let board = Array(9).fill().map(() => Array(9).fill('.'));
     let originalBoard = Array(9).fill().map(() => Array(9).fill('.'));
+    let solution = Array(9).fill().map(() => Array(9).fill('.'));
     let isSolving = false;
     let timerInterval;
     let gameStarted = false;
@@ -339,14 +392,16 @@
     let maxMistakes = 3;
     let gameOver = false;
     let savedPuzzles = [];
+    let currentFocusedCell = null;
 
     // Initialize game
     $(document).ready(function() {
-        generateGrid();
-        updateGrid();
-        $('#status').text('Generate a new puzzle to start playing!');
-        loadSavedPuzzles();
-    });
+    generateGrid();
+    updateGrid();
+    $('#status').text('Generate a new puzzle to start playing!');
+    loadSavedPuzzles();
+    // Remove this line: loadExamplePuzzle();
+});
 
     function generateGrid() {
         let gridHTML = '';
@@ -362,13 +417,109 @@
                            class="${subgridClass}"
                            id="cell-${i}-${j}"
                            oninput="updateBoard(this, ${i}, ${j})"
-                           onkeypress="return event.charCode >= 49 && event.charCode <= 57 || event.charCode === 8 || event.charCode === 46"
+                           onkeydown="handleKeyDown(event, ${i}, ${j})"
+                           onfocus="handleCellFocus(${i}, ${j})"
+                           onblur="handleCellBlur(${i}, ${j})"
                            autocomplete="off">
                 </td>`;
             }
             gridHTML += '</tr>';
         }
         $('#sudoku-tbody').html(gridHTML);
+    }
+
+    function handleKeyDown(event, row, col) {
+        if (gameOver) return;
+
+        // Allow backspace and delete
+        if (event.key === 'Backspace' || event.key === 'Delete') {
+            if (originalBoard[row][col] === '.') {
+                board[row][col] = '.';
+                $(`#cell-${row}-${col}`).val('');
+                clearValidationHighlights();
+                validateBoardRealTime();
+            }
+            return;
+        }
+
+        // Only allow numbers 1-9
+        if (event.key >= '1' && event.key <= '9') {
+            return true;
+        }
+
+        // Arrow key navigation
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            navigateGrid(event.key, row, col);
+            event.preventDefault();
+            return false;
+        }
+
+        // Block all other keys
+        event.preventDefault();
+        return false;
+    }
+
+    function navigateGrid(key, row, col) {
+        let newRow = row;
+        let newCol = col;
+
+        switch(key) {
+            case 'ArrowUp':
+                newRow = row > 0 ? row - 1 : 8;
+                break;
+            case 'ArrowDown':
+                newRow = row < 8 ? row + 1 : 0;
+                break;
+            case 'ArrowLeft':
+                newCol = col > 0 ? col - 1 : 8;
+                break;
+            case 'ArrowRight':
+                newCol = col < 8 ? col + 1 : 0;
+                break;
+        }
+
+        $(`#cell-${newRow}-${newCol}`).focus();
+    }
+
+    function handleCellFocus(row, col) {
+        currentFocusedCell = {row, col};
+        highlightRelatedCells(row, col);
+    }
+
+    function handleCellBlur(row, col) {
+        currentFocusedCell = null;
+        clearHighlights();
+    }
+
+    function highlightRelatedCells(row, col) {
+        clearHighlights();
+
+        // Highlight same row, column, and 3x3 box
+        for (let i = 0; i < 9; i++) {
+            // Same row
+            if (i !== col) {
+                $(`#cell-${row}-${i}`).addClass('highlighted');
+            }
+            // Same column
+            if (i !== row) {
+                $(`#cell-${i}-${col}`).addClass('highlighted');
+            }
+        }
+
+        // Same 3x3 box
+        const startRow = 3 * Math.floor(row / 3);
+        const startCol = 3 * Math.floor(col / 3);
+        for (let i = startRow; i < startRow + 3; i++) {
+            for (let j = startCol; j < startCol + 3; j++) {
+                if (i !== row || j !== col) {
+                    $(`#cell-${i}-${j}`).addClass('highlighted');
+                }
+            }
+        }
+    }
+
+    function clearHighlights() {
+        $('.sudoku-grid input').removeClass('highlighted');
     }
 
     function updateBoard(element, i, j) {
@@ -397,47 +548,106 @@
 
         board[i][j] = value === '' ? '.' : value;
 
+        // Clear previous validation highlights
+        clearValidationHighlights();
+
+        // Real-time validation
+        validateBoardRealTime();
+
         // Check for validity and handle mistakes
         if (value !== '' && !isValidMove(i, j, value)) {
             element.classList.add('invalid');
+            showError(`Invalid move: ${value} conflicts with existing numbers`);
 
-            // Only count as mistake if it's a new invalid entry
             if (oldValue !== value) {
                 mistakes++;
                 updateMistakesDisplay();
 
                 if (mistakes >= maxMistakes) {
-                    endGame();
+                    setTimeout(() => endGame(), 500);
                 }
             }
         } else {
             element.classList.remove('invalid');
+            hideError();
 
-            // Check if puzzle is complete
             if (isPuzzleComplete()) {
-                completePuzzle();
+                setTimeout(() => completePuzzle(), 500);
             }
         }
+    }
+
+    function validateBoardRealTime() {
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                const value = board[i][j];
+                if (value !== '.') {
+                    const cell = $(`#cell-${i}-${j}`);
+
+                    if (hasDuplicates(i, j, value)) {
+                        cell.addClass('duplicate');
+                    } else {
+                        cell.removeClass('duplicate');
+                    }
+                }
+            }
+        }
+    }
+
+    function hasDuplicates(row, col, value) {
+        for (let j = 0; j < 9; j++) {
+            if (j !== col && board[row][j] === value) {
+                return true;
+            }
+        }
+
+        for (let i = 0; i < 9; i++) {
+            if (i !== row && board[i][col] === value) {
+                return true;
+            }
+        }
+
+        const startRow = 3 * Math.floor(row / 3);
+        const startCol = 3 * Math.floor(col / 3);
+        for (let i = startRow; i < startRow + 3; i++) {
+            for (let j = startCol; j < startCol + 3; j++) {
+                if ((i !== row || j !== col) && board[i][j] === value) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    function clearValidationHighlights() {
+        $('.sudoku-grid input').removeClass('duplicate invalid');
+    }
+
+    function showError(message) {
+        $('#error-message').text(message).show();
+        setTimeout(() => hideError(), 3000);
+    }
+
+    function hideError() {
+        $('#error-message').hide();
     }
 
     function isValidMove(row, col, num) {
         const tempBoard = board.map(row => [...row]);
 
-        // Check row
         for (let i = 0; i < 9; i++) {
             if (i !== col && tempBoard[row][i] === num) {
                 return false;
             }
         }
 
-        // Check column
         for (let i = 0; i < 9; i++) {
             if (i !== row && tempBoard[i][col] === num) {
                 return false;
             }
         }
 
-        // Check 3x3 box
         const startRow = 3 * Math.floor(row / 3);
         const startCol = 3 * Math.floor(col / 3);
         for (let i = startRow; i < startRow + 3; i++) {
@@ -457,11 +667,11 @@
         isSolving = true;
         $('#status').text('Solving...');
 
-        // Simulate API call with backtracking solution
         setTimeout(() => {
             const boardCopy = board.map(row => [...row]);
             if (solveSudoku(boardCopy)) {
                 board = boardCopy;
+                solution = boardCopy.map(row => [...row]);
                 updateGrid();
                 $('#status').text('Puzzle solved!');
                 stopTimer();
@@ -471,6 +681,32 @@
             }
             isSolving = false;
         }, 500);
+    }
+
+    function getHint() {
+        if (gameOver) return;
+
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                if (board[i][j] === '.' && originalBoard[i][j] === '.') {
+                    const solutionCopy = board.map(row => [...row]);
+                    if (solveSudoku(solutionCopy)) {
+                        const hintValue = solutionCopy[i][j];
+                        board[i][j] = hintValue;
+                        updateGrid();
+                        $(`#cell-${i}-${j}`).addClass('hint-cell').css('background-color', '#e8f5e8');
+                        $('#status').text(`Hint: Added ${hintValue} at row ${i+1}, column ${j+1}`);
+
+                        if (isPuzzleComplete()) {
+                            setTimeout(() => completePuzzle(), 500);
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+
+        $('#status').text('No hints available - puzzle might be complete!');
     }
 
     function solveSudoku(board) {
@@ -494,17 +730,14 @@
     }
 
     function isValidPlacement(board, row, col, num) {
-        // Check row
         for (let i = 0; i < 9; i++) {
             if (board[row][i] === num) return false;
         }
 
-        // Check column
         for (let i = 0; i < 9; i++) {
             if (board[i][col] === num) return false;
         }
 
-        // Check 3x3 box
         const startRow = 3 * Math.floor(row / 3);
         const startCol = 3 * Math.floor(col / 3);
         for (let i = startRow; i < startRow + 3; i++) {
@@ -516,25 +749,51 @@
         return true;
     }
 
+    function loadExamplePuzzle() {
+    if (confirm('Load example puzzle? This will replace current game.')) {
+        const examplePuzzle = [
+            ['4', '.', '7', '.', '.', '.', '.', '.', '.'],
+            ['.', '5', '.', '7', '.', '.', '.', '4', '.'],
+            ['.', '1', '9', '.', '.', '4', '7', '.', '8'],
+            ['8', '2', '.', '6', '7', '5', '9', '4', '1'],
+            ['1', '6', '5', '4', '9', '8', '.', '.', '7'],
+            ['7', '4', '.', '2', '1', '3', '5', '.', '6'],
+            ['5', '7', '8', '9', '4', '2', '.', '.', '.'],
+            ['2', '3', '1', '8', '5', '6', '4', '7', '9'],
+            ['6', '9', '4', '1', '3', '7', '.', '.', '2']
+        ];
+
+        board = examplePuzzle.map(row => [...row]);
+        originalBoard = examplePuzzle.map(row => [...row]);
+
+        resetGame();
+        updateGrid();
+        $('#status').text('Example puzzle loaded! Start playing.');
+        $('#current-difficulty').text('Example');
+    }
+}
+
     function generatePuzzle() {
+        if (gameOver) return;
+
         $('#status').text('Generating puzzle...');
 
         const difficulty = $('#difficulty').val();
         $('#current-difficulty').text(difficulty.charAt(0).toUpperCase() + difficulty.slice(1));
 
         setTimeout(() => {
-            // Generate a complete solved board
             const newBoard = Array(9).fill().map(() => Array(9).fill('.'));
 
-            // Fill diagonal boxes first
             for (let i = 0; i < 9; i += 3) {
                 fillBox(newBoard, i, i);
             }
 
-            // Solve the board
-            solveSudoku(newBoard);
+            if (!solveSudoku(newBoard)) {
+                $('#status').text('Failed to generate a valid puzzle!');
+                return;
+            }
 
-            // Remove numbers based on difficulty
+            solution = newBoard.map(row => [...row]);
             let clues;
             switch (difficulty) {
                 case 'easy': clues = 40; break;
@@ -543,7 +802,28 @@
                 default: clues = 30;
             }
 
-            removeNumbers(newBoard, clues);
+            const positions = [];
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    positions.push([i, j]);
+                }
+            }
+            shuffleArray(positions);
+
+            let removed = 0;
+            const tempBoard = newBoard.map(row => [...row]);
+            for (const [row, col] of positions) {
+                if (removed >= 81 - clues) break;
+                const backup = tempBoard[row][col];
+                tempBoard[row][col] = '.';
+                const tempSolution = tempBoard.map(row => [...row]);
+                if (solveSudoku(tempSolution)) {
+                    newBoard[row][col] = '.';
+                    removed++;
+                } else {
+                    tempBoard[row][col] = backup;
+                }
+            }
 
             board = newBoard;
             originalBoard = newBoard.map(row => [...row]);
@@ -582,7 +862,6 @@
         for (const [row, col] of positions) {
             if (removed >= numbersToRemove) break;
 
-            const backup = board[row][col];
             board[row][col] = '.';
             removed++;
         }
@@ -604,13 +883,18 @@
         const puzzle = {
             id: Date.now(),
             board: board.map(row => row.join('')).join('\n'),
+            original: originalBoard.map(row => row.join('')).join('\n'),
             difficulty: $('#difficulty').val(),
             createdAt: new Date().toISOString()
         };
 
         savedPuzzles.push(puzzle);
-        localStorage.setItem('sudokuPuzzles', JSON.stringify(savedPuzzles));
-        $('#status').text(`Puzzle saved successfully! ID: ${puzzle.id}`);
+        try {
+            localStorage.setItem('sudokuPuzzles', JSON.stringify(savedPuzzles));
+            $('#status').text(`Puzzle saved successfully! ID: ${puzzle.id}`);
+        } catch (error) {
+            $('#status').text('Error saving puzzle!');
+        }
     }
 
     function loadPuzzle() {
@@ -619,50 +903,98 @@
             return;
         }
 
-        let puzzleList = 'Available puzzles:\n';
-        savedPuzzles.forEach(p => {
-            puzzleList += `ID: ${p.id}, Difficulty: ${p.difficulty || 'Unknown'}, Created: ${new Date(p.createdAt).toLocaleString()}\n`;
-        });
+        const puzzleId = prompt('Enter puzzle ID to load:');
+        if (!puzzleId) return;
 
-        const id = prompt(puzzleList + '\nEnter puzzle ID to load:');
-        if (id) {
-            const puzzle = savedPuzzles.find(p => p.id.toString() === id);
-            if (puzzle) {
-                const rows = puzzle.board.split('\n');
-                board = rows.map(row => row.split(''));
-                originalBoard = board.map(row => [...row]);
-                resetGame();
-                updateGrid();
-                $('#status').text(`Puzzle ${id} loaded successfully!`);
-            } else {
-                $('#status').text('Puzzle not found!');
-            }
+        const puzzle = savedPuzzles.find(p => p.id.toString() === puzzleId);
+        if (!puzzle) {
+            $('#status').text('Puzzle not found!');
+            return;
         }
+
+        const boardData = puzzle.board.split('\n').map(row => row.split(''));
+        const originalData = puzzle.original.split('\n').map(row => row.split(''));
+
+        board = boardData;
+        originalBoard = originalData;
+
+        resetGame();
+        updateGrid();
+        $('#status').text(`Puzzle ${puzzleId} loaded successfully!`);
+        $('#current-difficulty').text(puzzle.difficulty.charAt(0).toUpperCase() + puzzle.difficulty.slice(1));
     }
 
     function loadSavedPuzzles() {
-        const saved = localStorage.getItem('sudokuPuzzles');
-        if (saved) {
-            savedPuzzles = JSON.parse(saved);
+        try {
+            const saved = localStorage.getItem('sudokuPuzzles');
+            if (saved) {
+                savedPuzzles = JSON.parse(saved);
+            }
+        } catch (error) {
+            console.error('Error loading saved puzzles:', error);
+        }
+    }
+
+    function validateBoard() {
+        if (gameOver) return;
+
+        let isValid = true;
+        let errorCount = 0;
+
+        $('.sudoku-grid input').removeClass('invalid duplicate');
+
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                const value = board[i][j];
+                if (value !== '.') {
+                    if (!isValidMove(i, j, value)) {
+                        isValid = false;
+                        errorCount++;
+                        $(`#cell-${i}-${j}`).addClass('invalid');
+                    }
+                }
+            }
+        }
+
+        if (isValid) {
+            $('#status').text('Board validation passed! ✅');
+        } else {
+            $('#status').text(`Board validation failed! ${errorCount} errors found. ❌`);
         }
     }
 
     function clearBoard() {
-        board = Array(9).fill().map(() => Array(9).fill('.'));
-        originalBoard = Array(9).fill().map(() => Array(9).fill('.'));
-        resetGame();
-        updateGrid();
-        $('#status').text('Board cleared! Generate a new puzzle to start playing.');
+        if (confirm('Are you sure you want to clear the board?')) {
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    if (originalBoard[i][j] === '.') {
+                        board[i][j] = '.';
+                    }
+                }
+            }
+            updateGrid();
+            clearValidationHighlights();
+            $('#status').text('Board cleared!');
+        }
+    }
+
+    function resetTimer() {
+        stopTimer();
+        timerInterval = null;
+        gameStarted = false;
+        $('#timer-display').text('00:00');
+        $('#timer').text('Time: 00:00');
+        $('#status').text('Timer reset!');
     }
 
     function resetGame() {
         mistakes = 0;
         gameOver = false;
         gameStarted = false;
-        updateMistakesDisplay();
         stopTimer();
-        resetTimer();
-        clearInvalidCells();
+        updateMistakesDisplay();
+        clearValidationHighlights();
+        $('.sudoku-grid input').removeClass('invalid duplicate hint-cell');
         $('#gameOverModal').hide();
     }
 
@@ -670,10 +1002,10 @@
         for (let i = 0; i < 9; i++) {
             for (let j = 0; j < 9; j++) {
                 const cell = $(`#cell-${i}-${j}`);
-                const value = board[i][j] === '.' ? '' : board[i][j];
-                cell.val(value);
+                const value = board[i][j];
 
-                // Mark prefilled cells
+                cell.val(value === '.' ? '' : value);
+
                 if (originalBoard[i][j] !== '.') {
                     cell.addClass('prefilled');
                     cell.prop('readonly', true);
@@ -681,9 +1013,29 @@
                     cell.removeClass('prefilled');
                     cell.prop('readonly', false);
                 }
-
-                cell.removeClass('invalid');
             }
+        }
+    }
+
+    function startTimer() {
+        if (timerInterval) return;
+
+        let seconds = 0;
+        timerInterval = setInterval(() => {
+            seconds++;
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const timeString = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+
+            $('#timer-display').text(timeString);
+            $('#timer').text(`Time: ${timeString}`);
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
         }
     }
 
@@ -691,62 +1043,58 @@
         $('#mistakes-display').text(`${mistakes}/${maxMistakes}`);
     }
 
-    function clearInvalidCells() {
-        $('.sudoku-grid input').removeClass('invalid');
-    }
-
-    function validateBoard() {
-        let isValid = true;
-        clearInvalidCells();
-
+    function isPuzzleComplete() {
         for (let i = 0; i < 9; i++) {
             for (let j = 0; j < 9; j++) {
-                const value = board[i][j];
-                if (value !== '.' && !isValidMove(i, j, value)) {
-                    $(`#cell-${i}-${j}`).addClass('invalid');
-                    isValid = false;
+                if (board[i][j] === '.') {
+                    return false;
                 }
             }
         }
 
-        if (isValid) {
-            $('#status').text('Board is valid!');
-        } else {
-            $('#status').text('Board contains invalid entries!');
-        }
-
-        return isValid;
-    }
-
-    function isPuzzleComplete() {
         for (let i = 0; i < 9; i++) {
             for (let j = 0; j < 9; j++) {
-                if (board[i][j] === '.') return false;
+                if (!isValidMove(i, j, board[i][j])) {
+                    return false;
+                }
             }
         }
-        return validateBoard();
+
+        return true;
     }
 
     function completePuzzle() {
         stopTimer();
         gameOver = true;
-        $('#status').text('Congratulations! Puzzle completed successfully!');
+        const timeString = $('#timer-display').text();
+        $('#status').text(`🎉 Congratulations! Puzzle completed in ${timeString} with ${mistakes} mistakes!`);
+
+        $('.sudoku-grid').addClass('pulse');
+        setTimeout(() => {
+            $('.sudoku-grid').removeClass('pulse');
+        }, 1000);
     }
 
     function endGame() {
-        gameOver = true;
         stopTimer();
+        gameOver = true;
+        $('#gameOverMessage').text(`You have made ${maxMistakes} mistakes and lost this game.`);
         $('#gameOverModal').show();
+        $('#status').text('Game Over - Too many mistakes!');
     }
 
     function secondChance() {
         mistakes = 0;
         gameOver = false;
         updateMistakesDisplay();
-        clearInvalidCells();
         $('#gameOverModal').hide();
-        $('#status').text('Second chance! Be more careful.');
-        startTimer();
+        $('#status').text('Second chance granted! Be careful with your moves.');
+
+        $('.sudoku-grid input').removeClass('invalid');
+
+        if (gameStarted) {
+            startTimer();
+        }
     }
 
     function newGame() {
@@ -754,83 +1102,103 @@
         generatePuzzle();
     }
 
-    function startTimer() {
-        let seconds = 0;
-        timerInterval = setInterval(() => {
-            seconds++;
-            const minutes = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            const timeString = `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-            $('#timer').text(`Time: ${timeString}`);
-            $('#timer-display').text(timeString);
-        }, 1000);
-    }
-
-    function stopTimer() {
-        clearInterval(timerInterval);
-    }
-
-    function resetTimer() {
-        stopTimer();
-        $('#timer').text('Time: 00:00');
-        $('#timer-display').text('00:00');
-    }
-
-    // Keyboard navigation
-    $(document).on('keydown', '.sudoku-grid input', function(e) {
-        const currentId = $(this).attr('id');
-        const parts = currentId.split('-');
-        let row = parseInt(parts[1]);
-        let col = parseInt(parts[2]);
-
-        switch(e.which) {
-            case 37: // left
-                col = col > 0 ? col - 1 : 8;
-                break;
-            case 38: // up
-                row = row > 0 ? row - 1 : 8;
-                break;
-            case 39: // right
-                col = col < 8 ? col + 1 : 0;
-                break;
-            case 40: // down
-                row = row < 8 ? row + 1 : 0;
-                break;
-            default:
-                return;
+    $('<style>').text(`
+        .pulse {
+            animation: pulse 1s ease-in-out;
         }
 
-        $(`#cell-${row}-${col}`).focus();
-        e.preventDefault();
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    `).appendTo('head');
+
+    $(document).keydown(function(e) {
+        if (gameOver) return;
+
+        if (e.ctrlKey && e.key === 'n') {
+            e.preventDefault();
+            generatePuzzle();
+        }
+
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            savePuzzle();
+        }
+
+        if (e.ctrlKey && e.key === 'l') {
+            e.preventDefault();
+            loadPuzzle();
+        }
+
+        if (e.ctrlKey && e.key === 'h') {
+            e.preventDefault();
+            getHint();
+        }
+
+        if (e.ctrlKey && e.key === 'v') {
+            e.preventDefault();
+            validateBoard();
+        }
+
+        if (e.key === 'Escape') {
+            $('#gameOverModal').hide();
+        }
     });
 
-    // Auto-advance on number input
-    $(document).on('input', '.sudoku-grid input', function() {
-        if (this.value.length === 1 && /[1-9]/.test(this.value)) {
-            const currentId = $(this).attr('id');
-            const parts = currentId.split('-');
-            let row = parseInt(parts[1]);
-            let col = parseInt(parts[2]);
+    $(document).click(function(e) {
+        if ($(e.target).is('#gameOverModal')) {
+            $('#gameOverModal').hide();
+        }
+    });
 
-            // Find next empty cell
-            do {
-                if (col < 8) {
-                    col++;
-                } else if (row < 8) {
-                    row++;
-                    col = 0;
-                } else {
-                    break;
-                }
-            } while (originalBoard[row][col] !== '.' && row < 9);
+    setInterval(function() {
+        if (gameStarted && !gameOver && !board.every(row => row.every(cell => cell === '.'))) {
+            const autoSave = {
+                id: 'autosave',
+                board: board.map(row => row.join('')).join('\n'),
+                original: originalBoard.map(row => row.join('')).join('\n'),
+                difficulty: $('#difficulty').val(),
+                createdAt: new Date().toISOString(),
+                mistakes: mistakes,
+                time: $('#timer-display').text()
+            };
 
-            if (row < 9 && col < 9) {
-                setTimeout(() => {
-                    $(`#cell-${row}-${col}`).focus();
-                }, 50);
+            try {
+                localStorage.setItem('sudokuAutoSave', JSON.stringify(autoSave));
+            } catch (error) {
+                console.error('Auto-save failed:', error);
             }
         }
-    });
+    }, 30000);
+
+    function loadAutoSave() {
+        try {
+            const autoSave = localStorage.getItem('sudokuAutoSave');
+            if (autoSave) {
+                const data = JSON.parse(autoSave);
+                if (confirm('Auto-saved game found. Would you like to continue?')) {
+                    const boardData = data.board.split('\n').map(row => row.split(''));
+                    const originalData = data.original.split('\n').map(row => row.split(''));
+
+                    board = boardData;
+                    originalBoard = originalData;
+                    mistakes = data.mistakes || 0;
+
+                    resetGame();
+                    updateGrid();
+                    updateMistakesDisplay();
+                    $('#status').text('Auto-saved game loaded!');
+                    $('#current-difficulty').text(data.difficulty.charAt(0).toUpperCase() + data.difficulty.slice(1));
+                }
+            }
+        } catch (error) {
+            console.error('Error loading auto-save:', error);
+        }
+    }
+
+    setTimeout(loadAutoSave, 1000);
 </script>
 </body>
 </html>
