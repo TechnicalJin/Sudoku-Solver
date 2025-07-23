@@ -561,53 +561,6 @@
             justify-content: center;
         }
 
-        .instructions {
-            background: rgba(45, 48, 71, 0.6);
-            border: 1px solid var(--grid-border);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-            position: relative;
-        }
-
-        .instructions h6 {
-            color: var(--primary-light);
-            margin-bottom: 15px;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-        }
-
-        .instructions h6::before {
-            content: "ⓘ";
-            font-size: 20px;
-        }
-
-        .instructions ul {
-            margin: 0;
-            padding-left: 20px;
-            max-height: 150px;
-            overflow: hidden;
-            transition: max-height 0.4s ease;
-        }
-
-        .instructions ul.collapsed {
-            max-height: 0;
-        }
-
-        .instructions li {
-            margin: 10px 0;
-            font-size: 15px;
-            color: #c5cae9;
-            transition: opacity 0.3s ease;
-        }
-
-        .instructions.collapsed li {
-            opacity: 0;
-        }
-
         .read-more {
             position: absolute;
             bottom: 10px;
@@ -625,43 +578,6 @@
         .read-more:hover {
             background: rgba(67, 97, 238, 0.5);
             transform: translateY(-2px);
-        }
-
-        .validation-hints {
-            background: rgba(45, 48, 71, 0.6);
-            border: 1px solid var(--grid-border);
-            border-radius: 12px;
-            padding: 20px;
-            margin: 20px 0;
-        }
-
-        .validation-hints h6 {
-            color: var(--success);
-            margin-bottom: 15px;
-            font-size: 18px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .validation-hints h6::before {
-            content: "✓";
-            font-size: 20px;
-        }
-
-        .hint-item {
-            font-size: 14px;
-            color: #c5cae9;
-            margin: 10px 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .hint-item::before {
-            content: "•";
-            color: var(--success);
-            font-size: 20px;
         }
 
         .error-message {
@@ -869,28 +785,6 @@
                         <div class="stat-label">Difficulty</div>
                         <div class="stat-value" id="current-difficulty">Medium</div>
                     </div>
-                </div>
-
-<!--                &lt;!&ndash; Validation Hints &ndash;&gt;-->
-<!--                <div class="validation-hints">-->
-<!--                    <h6>Live Validation:</h6>-->
-<!--                    <div class="hint-item">✓ Real-time error detection</div>-->
-<!--                    <div class="hint-item">✓ Duplicate number highlighting</div>-->
-<!--                    <div class="hint-item">✓ Invalid moves prevention</div>-->
-<!--                    <div class="hint-item">✓ Visual feedback for errors</div>-->
-<!--                </div>-->
-
-                <!-- Instructions -->
-                <div class="instructions">
-                    <h6>How to play Sudoku:</h6>
-                    <ul>
-                        <li>Fill each row with numbers 1-9 (no duplicates)</li>
-                        <li>Fill each column with numbers 1-9 (no duplicates)</li>
-                        <li>Fill each 3×3 grid with numbers 1-9 (no duplicates)</li>
-                        <li>You have 3 mistakes allowed per game</li>
-                        <li>Invalid entries will be highlighted in red</li>
-                        <li>Use arrow keys to navigate between cells</li>
-                    </ul>
                 </div>
 
                 <!-- Solving Actions -->
